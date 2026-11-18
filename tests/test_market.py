@@ -154,3 +154,28 @@ def test_market_study_reports_full_history_and_stress_subsets(monkeypatch, tmp_p
     assert "Largest realized portfolio loss: 10.00% on 2020-03-02" in report
     for name in ("full-period", "march-2020", "2022"):
         assert (output / f"{name}.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+
+    validation = (output / "model-validation.md").read_text(encoding="utf-8")
+    assert provenance["prices_sha256"] in validation
+    assert "Maximum drawdown 10.00% (2020-02-28 to 2020-03-02)" in validation
+    assert "The average paired gap is descriptive" in validation
+    march = validation.split("### March 2020")[1].split("### Calendar year 2022")[0]
+    assert "| Historical | 1 | 10.000% | 0.000% | +10.000% |" in march
+
+    tail = pd.read_csv(output / "var-exceedances.csv")
+    assert len(tail) == 6
+    assert tail["target_date"].tolist() == ["2020-03-02", "2022-01-03"] * 3
+    assert tail["run_id"].tolist() == [1, 2] * 3
+    assert sorted(tail["loss_minus_es"]) == pytest.approx([0.05] * 3 + [0.10] * 3)
+
+    attribution = pd.read_csv(output / "volatility-attribution.csv")
+    assert len(attribution) == 2 * 3 * (len(dates) - 251)
+    before_shock = attribution[attribution["target_date"] == "2020-03-02"]
+    assert before_shock["component_volatility"].isna().all()
+    assert before_shock["portfolio_volatility"].eq(0).all()
+    defined = attribution.dropna(subset=["component_volatility"])
+    groups = defined.groupby(["method", "target_date"])
+    np.testing.assert_allclose(
+        groups["component_volatility"].sum(), groups["portfolio_volatility"].first(),
+        rtol=1e-8, atol=1e-14,
+    )

@@ -79,11 +79,16 @@ def portfolio_returns(
     returns: pd.DataFrame, weights: Mapping[str, float]
 ) -> pd.Series:
     """Aggregate asset returns for a fully invested, fixed-weight long-only portfolio."""
-    if not returns.columns.is_unique or set(returns.columns) != set(weights):
+    return returns.dot(portfolio_weights(returns.columns, weights)).rename("portfolio_return")
+
+
+def portfolio_weights(columns: pd.Index, weights: Mapping[str, float]) -> np.ndarray:
+    """Validate and align fixed portfolio weights to the asset columns."""
+    if not columns.is_unique or set(columns) != set(weights):
         raise ValueError("weight symbols must match the asset columns exactly")
-    allocations = np.array([weights[symbol] for symbol in returns.columns], dtype=float)
+    allocations = np.array([weights[symbol] for symbol in columns], dtype=float)
     if not np.isfinite(allocations).all() or np.any(allocations < 0):
         raise ValueError("portfolio weights must be finite and nonnegative")
     if not np.isclose(allocations.sum(), 1, rtol=0, atol=1e-10):
         raise ValueError("portfolio weights must sum to one")
-    return returns.dot(allocations).rename("portfolio_return")
+    return allocations

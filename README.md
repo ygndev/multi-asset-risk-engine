@@ -107,8 +107,40 @@ loss and forecasts for all three models over each period.
 At 99% confidence, March 2020 has well under one nominal expected breach per
 model. The stress windows provide descriptive comparisons, and sparse
 transitions limit the power and reliability of asymptotic coverage tests.
-The report evaluates VaR coverage. ES is forecast and displayed under the
-assumptions below.
+The coverage tests evaluate VaR. The additional model validation report
+describes ES on the observed tail dates.
+
+### Model validation outputs
+
+The same `market-study` command writes `model-validation.md` and two additional
+CSVs. To reuse a previously fetched snapshot, run the study directly with a
+new output directory.
+
+```sh
+risk-engine market-study artifacts/market-data artifacts/model-validation
+```
+
+- `volatility-attribution.csv` uses the same pre-target windows as the Gaussian
+  and EWMA forecasts. For portfolio volatility `σ = sqrt(wᵀΣw)`, the marginal
+  contribution is `(Σw)ᵢ / σ` and the component is `wᵢ(Σw)ᵢ / σ`. The Gaussian
+  covariance is the centered sample covariance with `ddof=1`. EWMA weights
+  uncentered outer products, with the first outer product as its initial
+  covariance. The signed components sum to portfolio volatility. Negative
+  components can occur when an asset has negative covariance with the
+  portfolio, even at a positive weight. At zero or numerically unresolved
+  variance, marginal and component values are undefined and appear as blanks.
+  These allocations are in volatility units. [Tasche](https://arxiv.org/abs/0708.2542)
+- `var-exceedances.csv` lists dates, realized loss, VaR, ES, the loss minus
+  each forecast, and run IDs for consecutive VaR exceedances. The report
+  summarizes frequency and magnitude and identifies maximum compounded
+  drawdown for each period. The peak search starts at wealth one on the
+  session immediately before the period's first forecast target.
+- The ES table pairs realized tail losses with the ES forecast on the same
+  dates. Its sample size counts strict VaR exceedances and can differ between
+  models. The paired mean gap is descriptive and depends on the VaR threshold
+  and tail sample. A formal ES backtest requires a statistical procedure with
+  a specified null and assumptions about calibration and dependence.
+  [Bayer and Dimitriadis](https://arxiv.org/abs/1801.04112)
 
 ## Risk and validation conventions
 
