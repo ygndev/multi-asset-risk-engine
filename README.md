@@ -1,13 +1,20 @@
 # Multi-Asset Risk Engine & Model Validation
 
-A Python research project for one-period portfolio VaR, Expected Shortfall (ES), and
-out-of-sample VaR validation. The [synthetic risk report](examples/synthetic-risk-report.md)
-compares historical simulation, a normal model with sample volatility, and a normal
-model with EWMA volatility on the same fixed-weight portfolio.
+A Python research project for one-session portfolio VaR and Expected Shortfall (ES),
+out-of-sample VaR validation, volatility attribution, and stress replay. The
+[synthetic report](examples/synthetic-risk-report.md) runs without market data.
+
+The [price loader](src/risk_engine/prices.py) computes aligned asset and portfolio
+returns. The [estimators](src/risk_engine/models.py) and
+[rolling backtest](src/risk_engine/backtest.py) forecast loss from earlier returns.
+[Market ingestion](src/risk_engine/market.py) saves and checks a price snapshot.
+[Market validation](src/risk_engine/market_study.py) and
+[stress analysis](src/risk_engine/stress.py) reuse that snapshot for their reports.
 
 ## Run the project
 
-Requires Python 3.11 or newer. Create a virtual environment from the repository root.
+Requires Python 3.11 or newer. The CI matrix covers Python 3.11–3.15 on Linux.
+Create a virtual environment from the repository root.
 
 ```sh
 python -m venv .venv
@@ -18,7 +25,7 @@ Activate the environment with `.\.venv\Scripts\Activate.ps1` in PowerShell or
 tests, and view the demo.
 
 ```sh
-python -m pip install -e ".[test]"
+python -m pip install ".[test]"
 python -m pytest -q
 risk-engine demo
 ```
@@ -70,10 +77,11 @@ are absent, since the loader does not infer exchange sessions or time zones.
 
 ## Reproduce the market study
 
-Install the optional market dependencies. The tests use offline fixtures.
+Install the optional market dependencies to run the full offline test suite and
+reproduce the historical reports. Fetch once if you need a snapshot.
 
 ```sh
-python -m pip install -e ".[market,test]"
+python -m pip install ".[market,test]"
 python -m pytest -q
 risk-engine fetch artifacts/market-data
 risk-engine market-study artifacts/market-data artifacts/market-study
@@ -90,10 +98,14 @@ Download failures stop the command with an error.
 
 The snapshot contains `prices.csv` in the same format accepted by `risk-engine
 run` and `provenance.json` with the provider, request settings, retrieval time in
-UTC, yfinance and calendar versions, observation range, and CSV SHA-256. Keep
-the snapshot to replay the exact study. A fresh download can reflect provider
-revisions. Both commands take new output directories, so previous snapshots
-and reports can be kept side by side.
+UTC, yfinance and calendar versions, observation range, and CSV SHA-256. Reuse
+both files to replay the same observations. A fresh download can reflect provider
+revisions. The backtest uses one retrospective data snapshot, so estimates are
+chronological within that snapshot and inherit its vendor adjustments. Both
+commands take new output directories, so previous runs can be kept side by side.
+Keep downloaded data and generated market artifacts local under the ignored
+`artifacts/` directory. Verify the provider's terms before any redistribution.
+[yfinance data-use notice](https://ranaroussi.github.io/yfinance/)
 
 The study fixes the weights at 50% IVV, 30% IEF, and 20% IAU. It uses a
 250-return rolling window, 99% confidence, and EWMA decay of 0.94. It fits each
@@ -104,11 +116,13 @@ Kupiec and Christoffersen p-values, and realized loss summaries. `forecasts.csv`
 contains daily realized losses, VaR, ES, and breach flags. The PNGs show the
 loss and forecasts for all three models over each period.
 
-At 99% confidence, March 2020 has well under one nominal expected breach per
-model. The stress windows provide descriptive comparisons, and sparse
-transitions limit the power and reliability of asymptotic coverage tests.
-The coverage tests evaluate VaR. The additional model validation report
-describes ES on the observed tail dates.
+At 99% confidence, March 2020 has 0.22 and 2022 has 2.51 nominal expected
+breaches per model. Even the full backtest has only about 0.35 expected
+consecutive breach pairs under independent 1% hits. Small counts and sparse
+transitions limit the precision of chi-square p-values, including Kupiec
+coverage in short samples. Treat
+stress-window diagnostics as descriptive. The coverage tests evaluate VaR and
+the additional model validation report describes ES on the observed tail dates.
 
 ### Model validation outputs
 
@@ -162,7 +176,8 @@ close-to-close returns with daily rebalancing. It reports signed cumulative
 loss, maximum drawdown, worst session, and how long it took to regain the
 peak preceding the largest drawdown. Wealth starts at one at the close
 before each window. The historical outcome stops at the window end, and
-recovery is followed separately through the snapshot's last session.
+recovery is followed separately through the snapshot's last session. Recovery
+allows a relative rounding tolerance of `1e-12` at the prior wealth peak.
 The daily paths and a chart accompany the report.
 
 Sensitivity compares baseline weights (50/30/20), a Treasury tilt
@@ -215,7 +230,22 @@ price path.
   (degrees of freedom 1, 1, and 2). An absent origin or destination state makes
   both transition tests unavailable in this implementation. [Kupiec](https://fedinprint.org/item/fedgfe/34596/original) · [Christoffersen](https://doi.org/10.2307/2527341)
 
-## Reading the example
+## Findings and limits
+
+The saved 2010–2024 study produced 3,523 forecasts per model. Historical, normal,
+and EWMA-normal VaR had 49, 76, and 67 breaches, respectively, against 35.23
+nominally expected. The fixed baseline lost 4.15% in March 2020 and 13.27% in
+2022. The Treasury tilt lost less in both replays and took longer to regain
+its prior peak after the 2022 trough. These are results for the stated portfolio,
+weights and snapshot.
+
+Loss-tail assumptions matter. Gaussian tails can understate extremes, and
+the empirical 99% ES uses only 2.5 observations' worth of tail mass in a
+250-return window. VaR counts, first-order breach dependence, and paired ES
+tail summaries cover different aspects of model behavior. Formal ES inference,
+trading performance, and regulatory compliance are outside the scope of the study.
+
+### Synthetic reference
 
 Across 1,250 forecasts per model, the historical, normal, and EWMA normal
 models recorded 20, 24, and 15 breaches, respectively. The nominal rate of 1%
@@ -232,7 +262,12 @@ sets the mean to zero. EWMA normal's conditional coverage p-value was
 0.6559, based on a sequence with zero consecutive breaches. Sparse transitions
 limit the reliability of these asymptotic tests.
 
-The likelihood-ratio tests assess VaR coverage and breach dependence. ES
-calibration is outside this version's scope. With a 250-return window, the 99%
-historical ES draws on 2.5 observations' worth of tail mass. The engine assumes
-frictionless rebalancing and has a single observation horizon.
+### Reproduction environment
+
+The reference reports were verified on Windows 11 x64 with CPython 3.12.14,
+NumPy 2.5.5, pandas 3.1.1, SciPy 1.18.1, exchange-calendars 4.13.3,
+Matplotlib 3.11.2, and yfinance 1.8.0. Record your Python version and package
+versions with `python -VV` and `python -m pip list --format=freeze`. Renderer,
+font, and numeric library differences can affect bytes across environments.
+With this stack, exchange-calendars emits four pandas deprecation warnings
+when constructing the XNYS calendar.

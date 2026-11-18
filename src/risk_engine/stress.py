@@ -77,16 +77,22 @@ def parse_scenarios(config: bytes) -> pd.DataFrame:
     return pd.DataFrame.from_dict(returns, orient="index", columns=list(WEIGHTS))
 
 
-def replay_period(returns: pd.Series, dates: slice) -> StressReplay:
-    """Replay realized returns, with recovery followed through the final observed close."""
-    index = returns.index
+def _validate_session_dates(index: pd.Index) -> None:
     if (
         not isinstance(index, pd.DatetimeIndex)
         or index.hasnans
         or not index.is_unique
         or not index.is_monotonic_increasing
     ):
-        raise ValueError("stress replay requires chronological and unique session dates")
+        raise ValueError("stress calculations require chronological and unique session dates")
+
+
+def replay_period(returns: pd.Series, dates: slice) -> StressReplay:
+    """Replay realized returns, with recovery followed through the final observed close."""
+    index = returns.index
+    _validate_session_dates(index)
+    if dates.step not in (None, 1):
+        raise ValueError("stress replay requires a contiguous date window")
     period = returns.loc[dates]
     if period.empty or period.index[0] == index[0]:
         raise ValueError("stress replay requires period returns and a preceding session")
@@ -105,7 +111,9 @@ def replay_period(returns: pd.Series, dates: slice) -> StressReplay:
 
     trough_index = wealth.index.get_loc(drawdown.trough_date)
     later = wealth.iloc[trough_index + 1:]
-    recovered = later[later >= wealth.at[drawdown.peak_date]]
+    # An exact recovery in prices can fall just below the peak after compounding.
+    recovery_level = wealth.at[drawdown.peak_date] * (1 - 1e-12)
+    recovered = later[later >= recovery_level]
     if recovered.empty:
         return StressReplay(path, drawdown, None, len(later))
     recovery_date = recovered.index[0]
@@ -117,6 +125,7 @@ def pre_stress_covariances(
     returns: pd.DataFrame, first_session: pd.Timestamp
 ) -> tuple[pd.Timestamp, dict[str, np.ndarray]]:
     """Fit both covariance estimators on the same pre-event asset return window."""
+    _validate_session_dates(returns.index)
     sample = returns.loc[returns.index < first_session].tail(WINDOW)
     if len(sample) < WINDOW:
         raise ValueError(f"need {WINDOW} returns before the first stress session")

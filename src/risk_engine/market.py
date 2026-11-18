@@ -1,15 +1,16 @@
 import json
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from importlib.metadata import version
+from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import numpy as np
 import pandas as pd
 
-from .prices import read_prices
+from .prices import parse_prices
 
 WEIGHTS = {"IVV": 0.50, "IEF": 0.30, "IAU": 0.20}
 WINDOW = 250
@@ -160,11 +161,17 @@ def read_market_snapshot(directory: Path) -> tuple[pd.DataFrame, dict]:
     for field in ("retrieved_at_utc", "yfinance_version", "exchange_calendars_version"):
         if not isinstance(provenance.get(field), str) or not provenance[field]:
             raise ValueError(f"snapshot provenance is missing {field}")
+    try:
+        retrieved_at = datetime.fromisoformat(provenance["retrieved_at_utc"])
+    except ValueError as error:
+        raise ValueError("retrieved_at_utc must be an ISO 8601 UTC timestamp") from error
+    if retrieved_at.utcoffset() != timedelta(0):
+        raise ValueError("retrieved_at_utc must be an ISO 8601 UTC timestamp")
 
-    csv_path = directory / "prices.csv"
-    if sha256(csv_path.read_bytes()).hexdigest() != provenance.get("prices_sha256"):
+    csv_bytes = (directory / "prices.csv").read_bytes()
+    if sha256(csv_bytes).hexdigest() != provenance.get("prices_sha256"):
         raise ValueError("prices.csv SHA-256 does not match provenance.json")
-    prices = read_prices(csv_path, sort=False)
+    prices = parse_prices(StringIO(csv_bytes.decode("utf-8-sig"), newline=""), sort=False)
     validate_market_prices(prices, expected_sessions())
     if (
         provenance.get("observations") != len(prices)

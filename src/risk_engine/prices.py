@@ -1,5 +1,5 @@
 import csv
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from datetime import date
 from pathlib import Path
 
@@ -9,39 +9,44 @@ import pandas as pd
 
 def read_prices(path: str | Path, *, sort: bool = True) -> pd.DataFrame:
     """Read a wide, daily adjusted-close CSV, sorting dates by default."""
+    with Path(path).open(encoding="utf-8-sig", newline="") as stream:
+        return parse_prices(stream, sort=sort)
+
+
+def parse_prices(lines: Iterable[str], *, sort: bool = True) -> pd.DataFrame:
+    """Parse decoded adjusted-close CSV lines."""
     dates = []
     rows = []
-    with Path(path).open(encoding="utf-8-sig", newline="") as stream:
-        reader = csv.reader(stream, strict=True)
-        header = next(reader, [])
-        if len(header) < 2 or header[0] != "date":
-            raise ValueError("price CSV requires a 'date' column followed by asset symbols")
-        symbols = [name.strip() for name in header[1:]]
-        if "" in symbols or len(set(symbols)) != len(symbols) or "date" in symbols:
-            raise ValueError("asset symbols must be nonempty, unique, and different from 'date'")
+    reader = csv.reader(lines, strict=True)
+    header = next(reader, [])
+    if len(header) < 2 or header[0] != "date":
+        raise ValueError("price CSV requires a 'date' column followed by asset symbols")
+    symbols = [name.strip() for name in header[1:]]
+    if "" in symbols or len(set(symbols)) != len(symbols) or "date" in symbols:
+        raise ValueError("asset symbols must be nonempty, unique, and different from 'date'")
 
-        for row in reader:
-            line = reader.line_num
-            if len(row) != len(header):
-                raise ValueError(f"line {line}: expected {len(header)} fields, got {len(row)}")
+    for row in reader:
+        line = reader.line_num
+        if len(row) != len(header):
+            raise ValueError(f"line {line}: expected {len(header)} fields, got {len(row)}")
+        try:
+            observation = date.fromisoformat(row[0])
+            if observation.isoformat() != row[0]:
+                raise ValueError
+        except ValueError:
+            raise ValueError(f"line {line}: expected a date in YYYY-MM-DD format") from None
+
+        closes = []
+        for symbol, field in zip(symbols, row[1:]):
             try:
-                observation = date.fromisoformat(row[0])
-                if observation.isoformat() != row[0]:
-                    raise ValueError
+                close = float(field)
             except ValueError:
-                raise ValueError(f"line {line}: expected a date in YYYY-MM-DD format") from None
-
-            closes = []
-            for symbol, field in zip(symbols, row[1:]):
-                try:
-                    close = float(field)
-                except ValueError:
-                    close = np.nan
-                if not np.isfinite(close) or close <= 0:
-                    raise ValueError(f"line {line}: {symbol} requires a finite, positive price")
-                closes.append(close)
-            dates.append(observation)
-            rows.append(closes)
+                close = np.nan
+            if not np.isfinite(close) or close <= 0:
+                raise ValueError(f"line {line}: {symbol} requires a finite, positive price")
+            closes.append(close)
+        dates.append(observation)
+        rows.append(closes)
 
     if len(rows) < 2:
         raise ValueError("at least two price observations are required")

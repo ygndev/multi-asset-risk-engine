@@ -1,0 +1,2 @@
+include examples/stress-scenarios.json
+include examples/synthetic-risk-report.md

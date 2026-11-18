@@ -7,7 +7,7 @@ import pytest
 
 from risk_engine.attribution import volatility_attribution
 from risk_engine.cli import main
-from risk_engine.prices import portfolio_returns, portfolio_weights
+from risk_engine.prices import portfolio_returns, portfolio_weights, price_returns
 from risk_engine.stress import PORTFOLIOS, parse_scenarios, pre_stress_covariances, replay_period
 
 
@@ -60,6 +60,22 @@ def test_positive_path_has_no_drawdown_recovery():
     assert replay.path["cumulative_return"].iloc[-1] == pytest.approx(0.0302)
     assert replay.recovery_date is None
     assert replay.recovery_sessions is None
+
+
+def test_recovery_accepts_a_repeated_close_despite_compounding_roundoff():
+    dates = pd.bdate_range("2024-01-02", periods=4)
+    prices = pd.DataFrame({"IVV": [100.0, 100.0, 82.0, 100.0]}, index=dates)
+    returns = price_returns(prices)["IVV"]
+    replay = replay_period(returns, slice(dates[2], dates[3]))
+    assert replay.recovery_date == dates[3]
+    assert replay.recovery_sessions == 1
+
+
+def test_replay_rejects_noncontiguous_windows():
+    dates = pd.bdate_range("2024-01-02", periods=5)
+    returns = pd.Series([0, 0.01, -0.20, 0.03, 0.04], index=dates)
+    with pytest.raises(ValueError, match="contiguous"):
+        replay_period(returns, slice(dates[1], dates[-1], 2))
 
 
 def test_percentage_shocks_are_converted_by_label_and_weighted():
@@ -134,6 +150,10 @@ def test_sensitivity_uses_only_pre_window_returns_and_aligns_weights():
         index=dates,
     )
     target = dates[252]
+    with pytest.raises(ValueError, match="chronological"):
+        pre_stress_covariances(assets.iloc[::-1], target)
+    with pytest.raises(ValueError, match="unique"):
+        pre_stress_covariances(pd.concat([assets.iloc[:1], assets]), target)
     as_of, covariances = pre_stress_covariances(assets, target)
     assert as_of == dates[251]
     baseline = PORTFOLIOS["Baseline"]

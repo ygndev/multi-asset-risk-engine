@@ -7,6 +7,7 @@ import pytest
 
 from risk_engine.cli import main
 from risk_engine.market import (
+    SNAPSHOT_SPEC,
     expected_sessions,
     fetch_market_prices,
     read_market_snapshot,
@@ -93,6 +94,49 @@ def test_fetch_writes_checked_snapshot(prices, monkeypatch, tmp_path):
     csv_path.write_bytes(csv_path.read_bytes() + b"\n")
     with pytest.raises(ValueError, match="SHA-256"):
         read_market_snapshot(snapshot)
+
+
+@pytest.fixture
+def snapshot_file(prices, monkeypatch, tmp_path):
+    monkeypatch.setattr("risk_engine.market.expected_sessions", lambda: prices.index)
+    csv_path = tmp_path / "prices.csv"
+    prices.to_csv(csv_path, index_label="date", lineterminator="\n")
+    provenance = {
+        **SNAPSHOT_SPEC,
+        "retrieved_at_utc": "2025-01-01T10:00:00+00:00",
+        "yfinance_version": "1.8.0",
+        "exchange_calendars_version": "4.13.3",
+        "first_session": prices.index[0].date().isoformat(),
+        "last_session": prices.index[-1].date().isoformat(),
+        "observations": len(prices),
+        "prices_sha256": sha256(csv_path.read_bytes()).hexdigest(),
+    }
+    (tmp_path / "provenance.json").write_text(json.dumps(provenance), encoding="utf-8")
+    return csv_path
+
+
+def test_snapshot_parses_the_same_bytes_that_were_hashed(snapshot_file, prices, monkeypatch):
+    replacement = prices.assign(IVV=777.0)
+
+    def replace_after_read(data):
+        digest = sha256(data)
+        replacement.to_csv(snapshot_file, index_label="date", lineterminator="\n")
+        return digest
+
+    monkeypatch.setattr("risk_engine.market.sha256", replace_after_read)
+    verified, _ = read_market_snapshot(snapshot_file.parent)
+    assert verified["IVV"].tolist() == prices["IVV"].tolist()
+    assert pd.read_csv(snapshot_file)["IVV"].eq(777.0).all()
+
+
+@pytest.mark.parametrize("timestamp", ["yesterday", "2025-01-01T10:00:00", "2025-01-01T10:00:00+02:00"])
+def test_snapshot_rejects_invalid_utc_provenance(snapshot_file, timestamp):
+    metadata_path = snapshot_file.with_name("provenance.json")
+    provenance = json.loads(metadata_path.read_text(encoding="utf-8"))
+    provenance["retrieved_at_utc"] = timestamp
+    metadata_path.write_text(json.dumps(provenance), encoding="utf-8")
+    with pytest.raises(ValueError, match="ISO 8601 UTC timestamp"):
+        read_market_snapshot(snapshot_file.parent)
 
 
 @pytest.mark.parametrize("response", ["empty", "partial", "network error"])
