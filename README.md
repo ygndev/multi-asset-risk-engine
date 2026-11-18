@@ -4,6 +4,12 @@ A Python research project for one-session portfolio VaR and Expected Shortfall (
 out-of-sample VaR validation, volatility attribution, and stress replay. The
 [synthetic report](examples/synthetic-risk-report.md) runs without market data.
 
+In the 2010–2024 market study, the historical, Gaussian, and EWMA-Gaussian
+models recorded 49, 76, and 67 VaR breaches across 3,523 forecasts each, against
+35.23 nominally expected at 99% confidence. The fixed baseline lost 4.15% in
+March 2020 and 13.27% in 2022. These results describe the chosen portfolio
+and one historical snapshot.
+
 The [price loader](src/risk_engine/prices.py) computes aligned asset and portfolio
 returns. The [estimators](src/risk_engine/models.py) and
 [rolling backtest](src/risk_engine/backtest.py) forecast loss from earlier returns.
@@ -29,6 +35,11 @@ python -m pip install ".[test]"
 python -m pytest -q
 risk-engine demo
 ```
+
+On Windows with long paths disabled, pip can raise `WinError 3` when moving
+the built wheel into a deeply nested cache. Retry the install with
+`--no-cache-dir` and point `TEMP` and `TMP` in that shell to a short, writable
+directory.
 
 To save the demo report as UTF-8 in PowerShell, run the following from the
 repository root.
@@ -230,14 +241,10 @@ price path.
   (degrees of freedom 1, 1, and 2). An absent origin or destination state makes
   both transition tests unavailable in this implementation. [Kupiec](https://fedinprint.org/item/fedgfe/34596/original) · [Christoffersen](https://doi.org/10.2307/2527341)
 
-## Findings and limits
+## Interpretation limits
 
-The saved 2010–2024 study produced 3,523 forecasts per model. Historical, normal,
-and EWMA-normal VaR had 49, 76, and 67 breaches, respectively, against 35.23
-nominally expected. The fixed baseline lost 4.15% in March 2020 and 13.27% in
-2022. The Treasury tilt lost less in both replays and took longer to regain
-its prior peak after the 2022 trough. These are results for the stated portfolio,
-weights and snapshot.
+The Treasury tilt lost less in both stress replays and took longer than
+the baseline to regain its prior peak after the 2022 trough.
 
 Loss-tail assumptions matter. Gaussian tails can understate extremes, and
 the empirical 99% ES uses only 2.5 observations' worth of tail mass in a
@@ -271,3 +278,8 @@ versions with `python -VV` and `python -m pip list --format=freeze`. Renderer,
 font, and numeric library differences can affect bytes across environments.
 With this stack, exchange-calendars emits four pandas deprecation warnings
 when constructing the XNYS calendar.
+
+## License
+
+The code is licensed under the [MIT License](LICENSE). Third-party
+market data remains subject to its provider's terms.

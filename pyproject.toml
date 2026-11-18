@@ -1,13 +1,15 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "multi-asset-risk-engine"
-version = "0.1.0"
+version = "1.0.0"
 description = "One-period portfolio risk forecasting and VaR model validation"
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = ["numpy>=1.26", "pandas>=2.1", "scipy>=1.11"]
 
 [project.optional-dependencies]
