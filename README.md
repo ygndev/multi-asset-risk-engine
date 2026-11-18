@@ -68,6 +68,48 @@ adjusted closes in a common currency on a prealigned calendar. Each pair of
 successive rows defines one return interval. Verify the input calendar if rows
 are absent, since the loader does not infer exchange sessions or time zones.
 
+## Reproduce the market study
+
+Install the optional market dependencies. The tests use offline fixtures.
+
+```sh
+python -m pip install -e ".[market,test]"
+python -m pytest -q
+risk-engine fetch artifacts/market-data
+risk-engine market-study artifacts/market-data artifacts/market-study
+```
+
+`fetch` requests daily USD prices for IVV, IEF, and IAU from Yahoo Finance via
+[yfinance](https://ranaroussi.github.io/yfinance/reference/api/yfinance.download.html).
+It requests January 1, 2010 through December 31, 2024 using an exclusive API
+end date of January 1, 2025. With `auto_adjust=True`, the returned `Close` field
+accounts for splits and distributions. The study uses the XNYS regular-session
+calendar as its common U.S. equity session reference. A missing or extra
+session, a duplicate or out-of-order date, or an invalid price stops the fetch.
+Download failures stop the command with an error.
+
+The snapshot contains `prices.csv` in the same format accepted by `risk-engine
+run` and `provenance.json` with the provider, request settings, retrieval time in
+UTC, yfinance and calendar versions, observation range, and CSV SHA-256. Keep
+the snapshot to replay the exact study. A fresh download can reflect provider
+revisions. Both commands take new output directories, so previous snapshots
+and reports can be kept side by side.
+
+The study fixes the weights at 50% IVV, 30% IEF, and 20% IAU. It uses a
+250-return rolling window, 99% confidence, and EWMA decay of 0.94. It fits each
+model along the full history using information through the preceding session,
+then selects the March 2020 and calendar-year 2022 forecasts by target date.
+The output includes `report.md` with nominal and observed VaR breaches,
+Kupiec and Christoffersen p-values, and realized loss summaries. `forecasts.csv`
+contains daily realized losses, VaR, ES, and breach flags. The PNGs show the
+loss and forecasts for all three models over each period.
+
+At 99% confidence, March 2020 has well under one nominal expected breach per
+model. The stress windows provide descriptive comparisons, and sparse
+transitions limit the power and reliability of asymptotic coverage tests.
+The report evaluates VaR coverage. ES is forecast and displayed under the
+assumptions below.
+
 ## Risk and validation conventions
 
 - **Portfolio.** Simple asset returns are combined by label as

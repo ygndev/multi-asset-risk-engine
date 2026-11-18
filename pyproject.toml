@@ -12,6 +12,7 @@ dependencies = ["numpy>=1.26", "pandas>=2.1", "scipy>=1.11"]
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
+market = ["yfinance>=1.0", "exchange-calendars>=4.8", "matplotlib>=3.8"]
 
 [project.scripts]
 risk-engine = "risk_engine.cli:main"

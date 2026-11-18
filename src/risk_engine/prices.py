@@ -7,8 +7,8 @@ import numpy as np
 import pandas as pd
 
 
-def read_prices(path: str | Path) -> pd.DataFrame:
-    """Read a wide, daily adjusted-close CSV; sort rows by observation date."""
+def read_prices(path: str | Path, *, sort: bool = True) -> pd.DataFrame:
+    """Read a wide, daily adjusted-close CSV, sorting dates by default."""
     dates = []
     rows = []
     with Path(path).open(encoding="utf-8-sig", newline="") as stream:
@@ -48,7 +48,8 @@ def read_prices(path: str | Path) -> pd.DataFrame:
     index = pd.DatetimeIndex(dates, name="date")
     if not index.is_unique:
         raise ValueError(f"duplicate price date: {index[index.duplicated()][0].date()}")
-    return pd.DataFrame(rows, index=index, columns=symbols).sort_index()
+    prices = pd.DataFrame(rows, index=index, columns=symbols)
+    return prices.sort_index() if sort else prices
 
 
 def price_returns(prices: pd.DataFrame) -> pd.DataFrame:

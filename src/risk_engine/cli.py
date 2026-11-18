@@ -7,6 +7,8 @@ import pandas as pd
 
 from .backtest import rolling_backtest
 from .demo import SEED, WEIGHTS, synthetic_prices
+from .market import fetch_market_prices
+from .market_study import run_market_study
 from .models import METHODS, estimate_risk
 from .prices import portfolio_returns, price_returns, read_prices
 from .validation import LikelihoodRatio, coverage_tests
@@ -111,6 +113,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     run = commands.add_parser("run", help="analyze a wide adjusted-close CSV")
     run.add_argument("prices", type=Path)
     run.add_argument("--weights", nargs="+", required=True, metavar="SYMBOL=WEIGHT")
+    fetch = commands.add_parser("fetch", help="download the fixed 2010–2024 market dataset")
+    fetch.add_argument("output", type=Path, help="new directory for prices and provenance")
+    study = commands.add_parser("market-study", help="backtest the fixed market portfolio")
+    study.add_argument("snapshot", type=Path, help="directory created by fetch")
+    study.add_argument("output", type=Path, help="new directory for the report and forecasts")
     for command in (demo, run):
         command.add_argument("--window", type=int, default=250, help="lookback in returns")
         command.add_argument("--confidence", type=float, default=0.99)
@@ -118,6 +125,14 @@ def main(argv: Sequence[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     try:
+        if args.command == "fetch":
+            fetch_market_prices(args.output)
+            print(f"Saved market prices and provenance to {args.output}")
+            return
+        if args.command == "market-study":
+            run_market_study(args.snapshot, args.output)
+            print(f"Saved market study to {args.output}")
+            return
         if args.command == "demo":
             prices, weights = synthetic_prices(), WEIGHTS
             source = f"Synthetic prices (PCG64 seed {SEED}; weekday calendar)"
