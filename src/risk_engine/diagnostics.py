@@ -25,6 +25,11 @@ def var_exceedances(history: pd.DataFrame) -> pd.DataFrame:
 
 def max_drawdown(returns: pd.Series, baseline_date: pd.Timestamp) -> Drawdown:
     """Measure a period's peak-to-trough loss from wealth of one before its first return."""
+    return peak_to_trough(compound_wealth(returns, baseline_date))
+
+
+def compound_wealth(returns: pd.Series, baseline_date: pd.Timestamp) -> pd.Series:
+    """Compound simple returns from an explicit preceding baseline."""
     dates = returns.index
     if (
         returns.empty
@@ -40,6 +45,11 @@ def max_drawdown(returns: pd.Series, baseline_date: pd.Timestamp) -> Drawdown:
     wealth = pd.concat([pd.Series([1.0], index=[baseline_date]), (1 + returns).cumprod()])
     if not np.isfinite(wealth).all():
         raise ValueError("compounded wealth exceeded the supported numeric range")
+    return wealth
+
+
+def peak_to_trough(wealth: pd.Series) -> Drawdown:
+    """Identify the largest drawdown in a compounded wealth path."""
     declines = 1 - wealth / wealth.cummax()
     trough = declines.idxmax()
     magnitude = float(declines.at[trough])

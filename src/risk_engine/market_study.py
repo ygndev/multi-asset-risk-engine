@@ -5,14 +5,12 @@ import pandas as pd
 from .attribution import rolling_volatility_attribution
 from .backtest import rolling_backtest
 from .diagnostics import max_drawdown, var_exceedances
-from .market import WEIGHTS, new_output_directory, read_market_snapshot
+from .market import DECAY, STRESS_PERIODS, WEIGHTS, WINDOW, new_output_directory, read_market_snapshot
 from .models import METHODS
 from .prices import portfolio_returns, price_returns
 from .validation import coverage_tests
 
-WINDOW = 250
 CONFIDENCE = 0.99
-DECAY = 0.94
 METHOD_LABELS = {
     "historical": "Historical",
     "normal": "Gaussian",
@@ -20,8 +18,7 @@ METHOD_LABELS = {
 }
 PERIODS = (
     ("Full backtest", "full-period", slice(None)),
-    ("March 2020", "march-2020", slice("2020-03-01", "2020-03-31")),
-    ("Calendar year 2022", "2022", slice("2022-01-01", "2022-12-31")),
+    *STRESS_PERIODS,
 )
 
 

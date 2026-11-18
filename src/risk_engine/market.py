@@ -12,6 +12,12 @@ import pandas as pd
 from .prices import read_prices
 
 WEIGHTS = {"IVV": 0.50, "IEF": 0.30, "IAU": 0.20}
+WINDOW = 250
+DECAY = 0.94
+STRESS_PERIODS = (
+    ("March 2020", "march-2020", slice("2020-03-01", "2020-03-31")),
+    ("Calendar year 2022", "2022", slice("2022-01-01", "2022-12-31")),
+)
 START = "2010-01-01"
 LAST_DATE = "2024-12-31"
 END_EXCLUSIVE = "2025-01-01"

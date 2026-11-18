@@ -11,6 +11,7 @@ from .market import fetch_market_prices
 from .market_study import run_market_study
 from .models import METHODS, estimate_risk
 from .prices import portfolio_returns, price_returns, read_prices
+from .stress import run_stress_test
 from .validation import LikelihoodRatio, coverage_tests
 
 METHOD_LABELS = {
@@ -118,6 +119,10 @@ def main(argv: Sequence[str] | None = None) -> None:
     study = commands.add_parser("market-study", help="backtest the fixed market portfolio")
     study.add_argument("snapshot", type=Path, help="directory created by fetch")
     study.add_argument("output", type=Path, help="new directory for the report and forecasts")
+    stress = commands.add_parser("stress-test", help="replay stress periods and apply one-day shocks")
+    stress.add_argument("snapshot", type=Path, help="directory created by fetch")
+    stress.add_argument("scenarios", type=Path, help="JSON file containing percentage shocks")
+    stress.add_argument("output", type=Path, help="new directory for the stress report")
     for command in (demo, run):
         command.add_argument("--window", type=int, default=250, help="lookback in returns")
         command.add_argument("--confidence", type=float, default=0.99)
@@ -132,6 +137,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         if args.command == "market-study":
             run_market_study(args.snapshot, args.output)
             print(f"Saved market study to {args.output}")
+            return
+        if args.command == "stress-test":
+            run_stress_test(args.snapshot, args.scenarios, args.output)
+            print(f"Saved stress study to {args.output}")
             return
         if args.command == "demo":
             prices, weights = synthetic_prices(), WEIGHTS

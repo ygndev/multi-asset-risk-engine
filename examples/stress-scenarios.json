@@ -1,0 +1,17 @@
+{
+  "unit": "percent",
+  "scenarios": [
+    {
+      "name": "Equity selloff",
+      "shocks": {"IVV": -15, "IEF": 2, "IAU": 4}
+    },
+    {
+      "name": "Rates shock",
+      "shocks": {"IVV": -6, "IEF": -10, "IAU": -3}
+    },
+    {
+      "name": "Cross-asset selloff",
+      "shocks": {"IVV": -10, "IEF": -7, "IAU": -8}
+    }
+  ]
+}
