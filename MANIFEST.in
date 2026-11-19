@@ -1,2 +1,4 @@
 include examples/stress-scenarios.json
 include examples/synthetic-risk-report.md
+include examples/plot_synthetic.py
+recursive-include docs *.md *.png
